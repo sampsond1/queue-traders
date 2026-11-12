@@ -54,6 +54,7 @@
         <section class="market-layout combined-market">
           <div class="chart-card">
             <div class="card-heading"><div><p class="eyebrow">THE WAIT BOARD <span class="live-tag"><span></span> LIVE</span></p><h2>Ten rides, one market</h2></div><div class="chart-unit">WAIT <span>·</span> MINUTES</div></div>
+            <label class="portfolio-filter"><input id="portfolio-filter" type="checkbox" disabled><span>Only rides I own</span></label>
             <div class="chart-wrap"><canvas id="combined-chart" aria-label="Ten Disneyland Resort ride wait times over the last six hours"></canvas><div class="chart-tooltip" id="combined-tooltip" hidden></div></div>
             <div class="chart-legend" id="combined-legend" aria-label="Toggle ride lines"></div>
             <div class="chart-note"><span class="note-mark">✦</span> Every dot is a real wait. New dots land each minute. <span class="park-key">DL · Disneyland &nbsp; DCA · California Adventure</span></div>
@@ -67,8 +68,13 @@
           </aside>
         </section>
 
+        <section class="portfolio-card" aria-labelledby="portfolio-title">
+          <div class="portfolio-heading"><div><p class="eyebrow">YOUR RIDE SHARES</p><h2 id="portfolio-title">Portfolio</h2><p>Open positions marked to the latest operating wait.</p></div><div class="portfolio-totals" aria-live="polite"><div><span>CASH</span><strong id="portfolio-cash">—</strong></div><div><span>SHARE VALUE</span><strong id="portfolio-value">—</strong></div><div><span>NET WORTH</span><strong id="portfolio-net-worth">—</strong></div></div></div>
+          <ol class="portfolio-list" id="portfolio-list"><li class="portfolio-empty">Sign in to see your portfolio.</li></ol>
+        </section>
+
         <section class="how-to-play-card" aria-labelledby="how-to-play-title">
-          <div class="how-to-play-heading"><p class="eyebrow">YOUR PARK-DAY STRATEGY</p><h2 id="how-to-play-title">How to play</h2><p>Watch the waits, make a few trades, and see how your park portfolio does.</p></div>
+          <div class="how-to-play-heading"><p class="eyebrow">YOUR PARK-DAY STRATEGY</p><h2 id="how-to-play-title">How to play</h2><p>Watch the waits, make a few trades, and see how your park portfolio does. Your portfolio also lets you filter the graph to rides you own.</p></div>
           <ol class="how-to-play-steps">
             <li><span class="step-number">1</span><div><strong>Get your park pass</strong><p>Sign in or create an account. Start with 1,000 credits, then claim 100 daily credits the first time you visit each UTC day.</p></div></li>
             <li><span class="step-number">2</span><div><strong>Pick a ride</strong><p>Select a ride in the watchlist. Its latest operating wait sets the price in credits per share; zero-minute waits cost 1 credit.</p></div></li>

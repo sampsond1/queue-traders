@@ -29,7 +29,7 @@
   const historyHours = 6;
   const pollMs = 60_000;
   const pageSize = 1000;
-  const state = { cache: new Map(), busy: new Set(), visibleRides: new Set(), selectedRide: null };
+  const state = { cache: new Map(), busy: new Set(), visibleRides: new Set(), ownedRideKeys: new Set(), ownedRideFilter: false, selectedRide: null };
   const $ = (id) => document.getElementById(id);
 
   function normalize(value) {
@@ -293,7 +293,8 @@
     const maxX = now;
     const series = allSeries();
     const rowsBySeries = new Map(series.map((ride) => [ride.key, ride.cache.observations.filter((row) => row.ride_name === ride.sourceName && row.wait_minutes !== null)]));
-    const maxWait = Math.max(60, ...[...rowsBySeries.values()].flat().map((row) => Number(row.wait_minutes)));
+    const displayedSeries = series.filter((ride) => state.visibleRides.has(ride.key) && (!state.ownedRideFilter || state.ownedRideKeys.has(ride.key)));
+    const maxWait = Math.max(60, ...displayedSeries.flatMap((ride) => rowsBySeries.get(ride.key).map((row) => Number(row.wait_minutes))));
     const yMax = Math.ceil(maxWait / 30) * 30;
     const x = (time) => pad.left + ((time - minX) / (maxX - minX)) * plotW;
     const y = (wait) => pad.top + plotH - (wait / yMax) * plotH;
@@ -317,7 +318,7 @@
     }
     ctx.save(); ctx.beginPath(); ctx.rect(pad.left, pad.top, plotW, plotH); ctx.clip();
     series.forEach((ride, index) => {
-      if (!state.visibleRides.has(ride.key)) return;
+      if (!state.visibleRides.has(ride.key) || (state.ownedRideFilter && !state.ownedRideKeys.has(ride.key))) return;
       const points = rowsBySeries.get(ride.key).filter((row) => Date.parse(row.collected_at) >= minX && Date.parse(row.collected_at) <= maxX);
       if (!points.length) return;
       ctx.beginPath();
@@ -370,7 +371,7 @@
     let best = null;
     for (let index = 0; index < layout.series.length; index += 1) {
       const ride = layout.series[index];
-      if (!state.visibleRides.has(ride.key)) continue;
+      if (!state.visibleRides.has(ride.key) || (state.ownedRideFilter && !state.ownedRideKeys.has(ride.key))) continue;
       for (const row of layout.rowsBySeries.get(ride.key)) {
         const dx = Math.abs(Date.parse(row.collected_at) - targetTime) / (layout.maxX - layout.minX) * layout.plotW;
         const dy = Math.abs(layout.y(Number(row.wait_minutes)) - my);
@@ -430,6 +431,25 @@
       return;
     }
     const canvas = $("combined-chart");
+    $("portfolio-filter").addEventListener("change", (event) => {
+      state.ownedRideFilter = event.currentTarget.checked;
+      drawChart();
+    });
+    window.addEventListener("queue:portfolio-updated", (event) => {
+      const { authenticated, rideKeys = [] } = event.detail || {};
+      state.ownedRideKeys = new Set(rideKeys);
+      const filter = $("portfolio-filter");
+      filter.disabled = !authenticated || state.ownedRideKeys.size === 0;
+      if (filter.disabled) {
+        filter.checked = false;
+        state.ownedRideFilter = false;
+      }
+      drawChart();
+    });
+    window.addEventListener("queue:show-ride", (event) => {
+      const { slug, rideName } = event.detail || {};
+      if (slug && rideName) showRideDetail(slug, rideName);
+    });
     canvas.addEventListener("mousemove", handleChartMove);
     canvas.addEventListener("mouseleave", () => { $("combined-tooltip").hidden = true; });
     window.addEventListener("resize", () => {

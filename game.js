@@ -8,7 +8,7 @@
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
   const $ = (id) => document.getElementById(id);
-  const state = { session: null, account: null, accountLoadError: false, selectedRide: null, signupMode: false };
+  const state = { session: null, account: null, accountLoadError: false, portfolio: [], portfolioLoadError: false, portfolioBusy: false, selectedRide: null, signupMode: false };
 
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -54,6 +54,83 @@
     }
   }
 
+  function credits(value, digits = 0) {
+    return Number(value).toLocaleString([], { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  }
+
+  function renderPortfolio() {
+    const list = $("portfolio-list");
+    const signedIn = Boolean(state.session?.user);
+    const emptyMessage = !signedIn ? "Sign in to see your portfolio." : state.portfolioLoadError
+      ? "Your portfolio could not be loaded. Try refreshing the page."
+      : "No open positions yet. Pick a ride and buy your first share.";
+    const cash = state.account ? Number(state.account.credits) : null;
+    const shareValue = state.portfolio.reduce((total, position) => total + Number(position.market_value_credits || 0), 0);
+    $("portfolio-cash").textContent = cash === null ? "—" : `${credits(cash)} cr`;
+    $("portfolio-value").textContent = signedIn && !state.portfolioLoadError ? `${credits(shareValue)} cr` : "—";
+    $("portfolio-net-worth").textContent = cash === null || state.portfolioLoadError ? "—" : `${credits(cash + shareValue)} cr`;
+    list.replaceChildren();
+
+    if (!state.portfolio.length) {
+      const item = document.createElement("li");
+      item.className = "portfolio-empty";
+      item.textContent = emptyMessage;
+      list.appendChild(item);
+      return;
+    }
+
+    for (const position of state.portfolio) {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      const value = Number(position.market_value_credits || 0);
+      const profit = Number(position.unrealized_profit_credits || 0);
+      const operating = position.status === "OPERATING" && position.wait_minutes !== null;
+      const parkName = position.park_slug === "disneyland" ? "Disneyland" : "California Adventure";
+      const parkCode = position.park_slug === "disneyland" ? "DL" : "DCA";
+      button.type = "button";
+      button.className = "portfolio-position";
+      button.innerHTML = `<span class="portfolio-ride"><span class="portfolio-park">${parkCode}</span><span class="portfolio-ride-name"><strong>${escapeHtml(position.ride_name)}</strong><small>${parkName} · ${Number(position.shares)} shares · avg ${credits(position.average_cost_credits, 1)} cr/share</small></span></span><span class="portfolio-market"><strong>${credits(value)} cr</strong><small>${operating ? `Latest wait ${credits(position.wait_minutes)} min` : escapeHtml((position.status || "No wait").replaceAll("_", " "))}</small></span><span class="portfolio-profit ${profit >= 0 ? "positive" : "negative"}"><strong>${profit >= 0 ? "+" : "−"}${credits(Math.abs(profit), 1)} cr</strong><small>unrealized</small></span>`;
+      button.addEventListener("click", () => {
+        window.dispatchEvent(new CustomEvent("queue:show-ride", { detail: { slug: position.park_slug, rideName: position.ride_name } }));
+      });
+      item.appendChild(button);
+      list.appendChild(item);
+    }
+  }
+
+  function publishPortfolioRides(authenticated) {
+    const rideKeys = state.portfolio.map((position) => `${position.park_slug}::${position.ride_name}`);
+    window.dispatchEvent(new CustomEvent("queue:portfolio-updated", { detail: { authenticated, rideKeys } }));
+  }
+
+  async function refreshPortfolio() {
+    if (!state.session?.user) {
+      state.portfolio = [];
+      state.portfolioLoadError = false;
+      renderPortfolio();
+      publishPortfolioRides(false);
+      return;
+    }
+    if (state.portfolioBusy) return;
+    const requestedUserId = state.session.user.id;
+    state.portfolioBusy = true;
+    try {
+      const data = await callGameApi({ action: "portfolio" });
+      if (!Array.isArray(data?.positions)) throw new Error("Portfolio response did not include a positions list.");
+      if (state.session?.user?.id !== requestedUserId) return;
+      state.portfolio = data.positions;
+      state.portfolioLoadError = false;
+    } catch (error) {
+      console.error("Could not load game portfolio:", error.message);
+      if (state.session?.user?.id === requestedUserId) state.portfolioLoadError = true;
+    } finally {
+      state.portfolioBusy = false;
+      renderPortfolio();
+      publishPortfolioRides(Boolean(state.session?.user));
+      if (state.session?.user && state.session.user.id !== requestedUserId) void refreshPortfolio();
+    }
+  }
+
   async function refreshAccount() {
     if (!state.session?.user) return;
     const data = await callGameApi({ action: "claim_daily" });
@@ -63,6 +140,7 @@
     state.account = data;
     state.accountLoadError = false;
     renderAuth();
+    renderPortfolio();
     return data;
   }
 
@@ -143,6 +221,7 @@
         message.textContent = `Sold ${shares} share${shares === 1 ? "" : "s"}. Realized ${profit >= 0 ? "gain" : "loss"}: ${Math.abs(profit).toFixed(2)} credits.`;
       }
       await refreshAccount();
+      await refreshPortfolio();
       await loadOwnedShares(slug, rideName);
       await loadLeaderboard();
     } catch (error) {
@@ -160,6 +239,8 @@
     state.session = session;
     state.account = null;
     state.accountLoadError = false;
+    state.portfolio = [];
+    state.portfolioLoadError = false;
     renderAuth();
     if (session?.user) {
       try {
@@ -173,6 +254,7 @@
       }
     }
     renderAuth();
+    await refreshPortfolio();
     renderTradePanel();
     await loadLeaderboard();
   }
@@ -275,6 +357,7 @@
     });
     void loadLeaderboard();
     window.setInterval(() => { void loadLeaderboard(); }, 60_000);
+    window.setInterval(() => { if (state.session?.user) void refreshPortfolio(); }, 60_000);
   }
 
   init();
