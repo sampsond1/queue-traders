@@ -8,7 +8,7 @@
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
   const $ = (id) => document.getElementById(id);
-  const state = { session: null, account: null, selectedRide: null, signupMode: false };
+  const state = { session: null, account: null, accountLoadError: false, selectedRide: null, signupMode: false };
 
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -47,14 +47,21 @@
     $("player-pill").hidden = !signedIn;
     if (signedIn) {
       $("player-name").textContent = state.account?.display_name || "Park rider";
-      $("player-credits").textContent = `${Number(state.account?.credits || 0).toLocaleString()} credits`;
+      const credits = state.account?.credits;
+      $("player-credits").textContent = Number.isFinite(Number(credits)) && credits !== null && credits !== undefined
+        ? `${Number(credits).toLocaleString()} credits`
+        : state.accountLoadError ? "Balance unavailable" : "Loading balance…";
     }
   }
 
   async function refreshAccount() {
     if (!state.session?.user) return;
     const data = await callGameApi({ action: "claim_daily" });
+    if (!data || !Number.isFinite(Number(data.credits))) {
+      throw new Error("Game account response did not include a numeric credits value.");
+    }
     state.account = data;
+    state.accountLoadError = false;
     renderAuth();
     return data;
   }
@@ -152,6 +159,7 @@
   async function applySession(session) {
     state.session = session;
     state.account = null;
+    state.accountLoadError = false;
     renderAuth();
     if (session?.user) {
       try {
@@ -161,6 +169,7 @@
         }
       } catch (error) {
         console.error("Could not load game account:", error.message);
+        state.accountLoadError = true;
       }
     }
     renderAuth();
