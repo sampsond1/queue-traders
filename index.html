@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f4efe5">
+    <meta name="theme-color" content="#fff4d9">
     <meta name="description" content="A live look at Disneyland Resort ride waits, powered by an automatically updating data pipeline.">
     <title>Queue Exchange · Disneyland Resort</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Nunito:wght@500;600;700;800;900&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -19,16 +19,21 @@
           <span>QUEUE<span class="brand-light">EXCHANGE</span></span>
         </a>
         <div class="topbar-note"><span class="sparkle">✳</span> THE WAIT-TIME MARKET</div>
-        <a class="pipeline-link" href="#about">How the data gets here <span aria-hidden="true">↗</span></a>
+        <div class="topbar-actions">
+          <button class="auth-open" id="auth-open" type="button">Sign in to play</button>
+          <div class="player-pill" id="player-pill" hidden><span id="player-name">Rider</span><strong id="player-credits">—</strong><button id="change-username" type="button">Name</button><button id="sign-out" type="button">Log out</button></div>
+          <a class="pipeline-link" href="#about">How the data gets here <span aria-hidden="true">↗</span></a>
+        </div>
       </header>
 
       <main id="top">
         <section class="intro-row">
           <div>
-            <p class="eyebrow">DISNEYLAND RESORT <span class="eyebrow-dot">·</span> LIVE FEED</p>
-            <h1>Make the wait<br><span>worth it.</span></h1>
-            <p class="intro-copy">Ride waits move all day. Keep an eye on the lines, spot a dip, and see what the data does next.</p>
+            <p class="eyebrow"><span class="mini-sparkle">✦</span> DISNEYLAND RESORT <span class="eyebrow-dot">·</span> LIVE FEED</p>
+            <h1>Wait for it...<br><span>the line is live!</span></h1>
+            <p class="intro-copy">Ride waits have ups, downs, and the occasional loop-de-loop. Pick a park and watch the lines wiggle.</p>
           </div>
+          <div class="hero-doodle" aria-hidden="true"><span class="doodle-star">✦</span><span class="doodle-ride">🎢</span><span class="doodle-twinkle">✧</span><span class="doodle-caption">TODAY'S WAIT<br>TIME ADVENTURE</span></div>
           <div class="status-card" aria-live="polite">
             <div class="status-heading"><span id="fresh-dot" class="fresh-dot"></span><span id="fresh-label">Connecting to the data feed</span></div>
             <div class="status-time" id="last-updated">—</div>
@@ -36,40 +41,45 @@
           </div>
         </section>
 
-        <section class="park-and-stats" aria-label="Park and data status">
-          <div class="park-switcher" role="tablist" aria-label="Choose a park">
-            <button class="park-tab is-active" role="tab" aria-selected="true" data-park="disneyland">Disneyland <span class="tab-arrow">↗</span></button>
-            <button class="park-tab" role="tab" aria-selected="false" data-park="california-adventure">California Adventure <span class="tab-arrow">↗</span></button>
-          </div>
+        <section class="park-and-stats" aria-label="Both parks and data status">
           <div class="summary-stats">
-            <div class="summary-stat"><span class="stat-label">RIDES TRACKED</span><strong id="rides-tracked">—</strong></div>
+            <div class="summary-stat"><span class="stat-label">OPERATING RIDE PICKS</span><strong id="rides-tracked">—</strong></div>
             <div class="summary-divider"></div>
-            <div class="summary-stat"><span class="stat-label">LATEST OBSERVATION</span><strong id="latest-wait">—</strong></div>
+            <div class="summary-stat"><span class="stat-label">MOST RECENT CHECK</span><strong id="latest-wait">—</strong></div>
             <div class="summary-divider"></div>
-            <div class="summary-stat"><span class="stat-label">HISTORY SHOWN</span><strong>6 HOURS</strong></div>
+            <div class="summary-stat"><span class="stat-label">HISTORY PER PARK</span><strong>6 HOURS</strong></div>
           </div>
         </section>
 
-        <section class="market-layout">
+        <section class="market-layout combined-market">
           <div class="chart-card">
-            <div class="card-heading">
-              <div>
-                <p class="eyebrow">THE WAIT BOARD <span class="live-tag"><span></span> LIVE</span></p>
-                <h2 id="chart-title">Disneyland rides</h2>
-              </div>
-              <div class="chart-unit">WAIT <span>·</span> MINUTES</div>
-            </div>
-            <div class="chart-wrap"><canvas id="wait-chart" aria-label="Ride wait times over the last six hours"></canvas><div class="chart-tooltip" id="chart-tooltip" hidden></div></div>
-            <div class="chart-legend" id="chart-legend" aria-label="Toggle ride lines"></div>
-            <div class="chart-note"><span class="note-mark">↗</span> Each point is a ride observation saved by the scheduled pipeline.</div>
+            <div class="card-heading"><div><p class="eyebrow">THE WAIT BOARD <span class="live-tag"><span></span> LIVE</span></p><h2>Ten rides, one market</h2></div><div class="chart-unit">WAIT <span>·</span> MINUTES</div></div>
+            <div class="chart-wrap"><canvas id="combined-chart" aria-label="Ten Disneyland Resort ride wait times over the last six hours"></canvas><div class="chart-tooltip" id="combined-tooltip" hidden></div></div>
+            <div class="chart-legend" id="combined-legend" aria-label="Toggle ride lines"></div>
+            <div class="chart-note"><span class="note-mark">✦</span> Every dot is a real wait. New dots land each minute. <span class="park-key">DL · Disneyland &nbsp; DCA · California Adventure</span></div>
           </div>
-
           <aside class="side-card">
             <div class="side-heading"><div><p class="eyebrow">YOUR WATCHLIST</p><h2>Ride signals</h2></div><span class="watchlist-icon" aria-hidden="true">✳</span></div>
-            <p class="side-subtitle">Your picks, with today's wait next to the captured historical average.</p>
-            <div class="ride-list" id="ride-list"><div class="loading-state">Loading your ride picks…</div></div>
+            <p class="side-subtitle">All ten picks together, with today's wait beside each captured average.</p>
+            <div class="ride-list combined-ride-list" id="ride-list"><div class="loading-state">Loading ride picks…</div></div>
+            <div class="ride-detail" id="ride-detail" hidden></div>
             <div class="side-foot"><span>BASELINE</span><span>Rope Drop best-times summary</span></div>
           </aside>
+        </section>
+
+        <section class="how-to-play-card" aria-labelledby="how-to-play-title">
+          <div class="how-to-play-heading"><p class="eyebrow">YOUR PARK-DAY STRATEGY</p><h2 id="how-to-play-title">How to play</h2><p>Watch the waits, make a few trades, and see how your park portfolio does.</p></div>
+          <ol class="how-to-play-steps">
+            <li><span class="step-number">1</span><div><strong>Get your park pass</strong><p>Sign in or create an account. Start with 1,000 credits, then claim 100 daily credits the first time you visit each UTC day.</p></div></li>
+            <li><span class="step-number">2</span><div><strong>Pick a ride</strong><p>Select a ride in the watchlist. Its latest operating wait sets the price in credits per share; zero-minute waits cost 1 credit.</p></div></li>
+            <li><span class="step-number">3</span><div><strong>Buy low, sell high</strong><p>Choose a whole number of shares and buy or sell. Trades use the newest wait when submitted, and you can’t spend credits you don’t have or sell shares you don’t own.</p></div></li>
+          </ol>
+          <div class="how-to-play-note"><strong>Keep an eye on ride status:</strong> If a ride is not operating, trading pauses. A newly reported non-operating status wipes all shares in that ride. Your leaderboard score is your credits plus the current value of your open shares.</div>
+        </section>
+
+        <section class="leaderboard-card" aria-labelledby="leaderboard-title">
+          <div><p class="eyebrow">THE FRIENDLY COMPETITION</p><h2 id="leaderboard-title">Park leaderboard</h2><p>Ranked by credits plus the current value of open shares.</p></div>
+          <ol id="leaderboard-list"><li class="leaderboard-empty">Sign in and make your first trade to claim a spot.</li></ol>
         </section>
 
         <section class="data-story" id="about">
@@ -82,7 +92,30 @@
         <footer><span>QUEUE EXCHANGE <span class="footer-star">✳</span> A CS 452 DATA PIPELINE PROJECT</span><span>WAIT TIMES ARE OBSERVATIONS, NOT PROMISES.</span></footer>
       </main>
     </div>
+    <dialog class="auth-dialog" id="auth-dialog">
+      <form id="auth-form" method="dialog">
+        <div class="auth-dialog-heading"><div><p class="eyebrow">YOUR PARK PASS</p><h2 id="auth-title">Sign in to play</h2></div><button class="detail-close" id="auth-close" type="button" aria-label="Close sign in">×</button></div>
+        <p class="auth-intro">Save your credits and ride positions between visits.</p>
+        <label id="username-field" hidden>Display username<input id="auth-username" name="display_name" type="text" minlength="3" maxlength="20" pattern="[A-Za-z0-9][A-Za-z0-9 _-]{2,19}" autocomplete="username" aria-describedby="username-help"><small id="username-help">3–20 characters; letters, numbers, spaces, _ or -.</small></label>
+        <label>Email<input id="auth-email" name="email" type="email" autocomplete="email" required></label>
+        <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required></label>
+        <p class="auth-message" id="auth-message" aria-live="polite"></p>
+        <button class="auth-submit" id="auth-submit" type="submit">Sign in</button>
+        <button class="auth-mode" id="auth-mode" type="button">New here? Create an account</button>
+      </form>
+    </dialog>
+    <dialog class="auth-dialog" id="username-dialog">
+      <form id="username-form">
+        <div class="auth-dialog-heading"><div><p class="eyebrow">LEADERBOARD NAME</p><h2>Choose your username</h2></div><button class="detail-close" id="username-close" type="button" aria-label="Close username settings">×</button></div>
+        <p class="auth-intro">Your email stays private. Other players see this name on the leaderboard.</p>
+        <label>Display username<input id="username-input" type="text" minlength="3" maxlength="20" pattern="[A-Za-z0-9][A-Za-z0-9 _-]{2,19}" autocomplete="username" required></label>
+        <p class="auth-message" id="username-message" aria-live="polite"></p>
+        <button class="auth-submit" id="username-save" type="submit">Save username</button>
+      </form>
+    </dialog>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="app.js"></script>
+    <script src="game.js"></script>
   </body>
 </html>

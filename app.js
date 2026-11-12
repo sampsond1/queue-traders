@@ -6,30 +6,30 @@
     disneyland: {
       name: "Disneyland",
       rides: [
-        { name: "Star Wars: Rise of the Resistance", aliases: ["Star Wars Rise of the Resistance"] },
-        { name: "Space Mountain" },
-        { name: "Peter Pan's Flight", aliases: ["Peter Pan Flight"] },
-        { name: "Mickey and Minnie's Runaway Railway", aliases: ["Mickey & Minnie's Runaway Railway", "Mickey and Minnies Runaway Railway"] },
-        { name: "Pirates of the Caribbean", aliases: ["Pirates of Caribbean"] },
-        { name: "Buzz Lightyear Astro Blasters" },
+        { name: "Star Wars: Rise of the Resistance", aliases: ["Star Wars Rise of the Resistance"], icon: "🛸" },
+        { name: "Space Mountain", icon: "🚀" },
+        { name: "Peter Pan's Flight", aliases: ["Peter Pan Flight"], icon: "🧚" },
+        { name: "Mickey and Minnie's Runaway Railway", aliases: ["Mickey & Minnie's Runaway Railway", "Mickey and Minnies Runaway Railway"], icon: "🚂" },
+        { name: "Pirates of the Caribbean", aliases: ["Pirates of Caribbean"], icon: "🏴‍☠️" },
+        { name: "Buzz Lightyear Astro Blasters", icon: "👾" },
       ],
     },
     "california-adventure": {
       name: "California Adventure",
       rides: [
-        { name: "Radiator Springs Racers" },
-        { name: "Incredicoaster" },
-        { name: "Mickey's PhilharMagic", aliases: ["Mickey's Philharmagic", "Mickey's Philhar Magic"] },
+        { name: "Radiator Springs Racers", icon: "🏎️" },
+        { name: "Incredicoaster", icon: "🎢" },
+        { name: "The Little Mermaid - Ariel's Undersea Adventure", aliases: ["The Little Mermaid ~ Ariel's Undersea Adventure", "The Little Mermaid Ariel's Undersea Adventure", "The Little Mermaid - Ariels' Undersea Adventure"], icon: "🧜‍♀️" },
         { name: "Guardians of the Galaxy – Mission: BREAKOUT!", aliases: ["Guardians of the Galaxy - Mission: BREAKOUT!", "Guardians of the Galaxy Mission Breakout", "Guardians of the Galaxy – Mission Breakout"] },
       ],
     },
   };
 
-  const colors = ["#ea8050", "#2f7562", "#839a52", "#a974bd", "#4d8ca2", "#d0a342"];
+  const colors = ["#f26f5b", "#2789bd", "#edaa28", "#9271d5", "#208e78", "#d85a91", "#6575d8", "#8cab3d", "#c45b3b", "#3f9db0"];
   const historyHours = 6;
   const pollMs = 60_000;
   const pageSize = 1000;
-  const state = { parkSlug: "disneyland", cache: new Map(), busy: false, visibleRides: new Set() };
+  const state = { cache: new Map(), busy: new Set(), visibleRides: new Set(), selectedRide: null };
   const $ = (id) => document.getElementById(id);
 
   function normalize(value) {
@@ -91,6 +91,16 @@
 
   function initialState() { return { rides: [], observations: [], bestTimes: new Map(), reliability: new Map(), loadedAt: null }; }
 
+  function allSeries() {
+    return Object.keys(parks).flatMap((slug) => {
+      const cache = state.cache.get(slug);
+      if (!cache) return [];
+      return cache.rides.filter((ride) => ride.sourceName).map(({ preference, sourceName }) => ({
+        key: `${slug}::${sourceName}`, slug, parkName: parks[slug].name, preference, sourceName, cache,
+      }));
+    });
+  }
+
   async function loadPark(slug) {
     const park = parks[slug];
     const cutoff = new Date(Date.now() - historyHours * 60 * 60 * 1000).toISOString();
@@ -150,19 +160,26 @@
     return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
   }
 
-  function updateFreshness(cache) {
-    const newest = cache?.observations.reduce((best, row) => !best || Date.parse(row.collected_at) > Date.parse(best) ? row.collected_at : best, null);
+  function updateFreshness() {
+    const caches = [...state.cache.values()];
+    const newestRows = caches.flatMap((cache) => cache.observations);
+    const newest = newestRows.reduce((best, row) => !best || Date.parse(row.collected_at) > Date.parse(best) ? row.collected_at : best, null);
     const dot = $("fresh-dot");
     const label = $("fresh-label");
     $("last-updated").textContent = newest ? `Last collected ${formatClock(newest)}` : "No observation found yet";
-    const age = newest ? Date.now() - Date.parse(newest) : Infinity;
-    dot.className = `fresh-dot${age > 5 * 60_000 ? " offline" : age > 150_000 ? " stale" : ""}`;
-    label.textContent = age <= 150_000 ? "Fresh data is arriving" : age <= 5 * 60_000 ? "Data is a little behind" : "Waiting for a fresh observation";
-    const latest = cache ? latestPerRide(cache.observations) : new Map();
+    const ages = [...state.cache.values()].map((cache) => {
+      const latest = cache.observations.reduce((best, row) => !best || Date.parse(row.collected_at) > Date.parse(best) ? row.collected_at : best, null);
+      return latest ? Date.now() - Date.parse(latest) : Infinity;
+    });
+    const worstAge = ages.length === Object.keys(parks).length ? Math.max(...ages) : Infinity;
+    dot.className = `fresh-dot${worstAge > 5 * 60_000 ? " offline" : worstAge > 150_000 ? " stale" : ""}`;
+    label.textContent = worstAge <= 150_000 ? "Both park feeds are fresh" : worstAge <= 5 * 60_000 ? "One park feed is a little behind" : "Waiting for fresh data from both parks";
+    const latestRows = caches.flatMap((cache) => [...latestPerRide(cache.observations).values()]);
     const latestTimestamp = newest ? new Date(newest).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—";
     $("latest-wait").textContent = latestTimestamp;
-    const active = [...latest.values()].filter((row) => row.status.toUpperCase() === "OPERATING").length;
-    $("rides-tracked").textContent = `${active}/${cache?.rides.filter((ride) => ride.sourceName).length || 0}`;
+    const active = latestRows.filter((row) => row.status.toUpperCase() === "OPERATING").length;
+    const total = caches.reduce((count, cache) => count + cache.rides.filter((ride) => ride.sourceName).length, 0);
+    $("rides-tracked").textContent = `${active}/${total || "—"}`;
   }
 
   function statusLabel(row) {
@@ -178,33 +195,87 @@
     return Number(value).toLocaleString([], { minimumFractionDigits: digits, maximumFractionDigits: digits });
   }
 
-  function renderRideList(cache) {
-    const latest = latestPerRide(cache.observations);
+  function renderRideList() {
     const container = $("ride-list");
     container.innerHTML = "";
-    cache.rides.forEach(({ preference, sourceName }, index) => {
-      const row = sourceName ? latest.get(sourceName) : null;
-      const baseline = sourceName ? cache.bestTimes.get(sourceName) : null;
-      const reliability = sourceName ? cache.reliability.get(normalize(sourceName)) : null;
-      const status = statusLabel(row);
-      const item = document.createElement("div");
-      item.className = `ride-row${sourceName ? "" : " not-found"}`;
-      if (sourceName) item.dataset.ride = sourceName;
-      const wait = row?.wait_minutes === null || row?.wait_minutes === undefined ? "—" : `${number(row.wait_minutes)}m`;
-      const baselineText = baseline ? `${number(baseline.average_wait_minutes, 0)}m avg` : "No baseline yet";
-      const reliabilityText = reliability ? ` · ${number(reliability.availability_percent, 0)}% reliable` : "";
-      item.innerHTML = `<div class="ride-main"><span class="ride-name" title="${escapeHtml(sourceName || preference.name)}">${escapeHtml(preference.name)}</span><span class="ride-meta"><i class="ride-state-dot ${status.state}"></i>${escapeHtml(sourceName ? status.text : "Not found in this park's feed")}${sourceName ? ` · ${baselineText}${reliabilityText}` : ""}</span></div><div class="ride-current">${sourceName ? wait : "—"}<small>${sourceName && row?.wait_minutes != null ? "CURRENT WAIT" : "WAIT"}</small></div>`;
-      if (sourceName) item.addEventListener("click", () => toggleRide(sourceName));
-      container.appendChild(item);
-    });
+    for (const slug of Object.keys(parks)) {
+      const cache = state.cache.get(slug);
+      if (!cache) continue;
+      const group = document.createElement("section");
+      group.className = "ride-group";
+      const heading = document.createElement("h3");
+      heading.className = "ride-group-label";
+      heading.innerHTML = `<span class="park-code ${slug === "disneyland" ? "dl" : "dca"}">${slug === "disneyland" ? "DL" : "DCA"}</span>${escapeHtml(parks[slug].name)}`;
+      group.appendChild(heading);
+      const latest = latestPerRide(cache.observations);
+      cache.rides.forEach(({ preference, sourceName }) => {
+        const row = sourceName ? latest.get(sourceName) : null;
+        const baseline = sourceName ? cache.bestTimes.get(sourceName) : null;
+        const reliability = sourceName ? cache.reliability.get(normalize(sourceName)) : null;
+        const status = statusLabel(row);
+        const item = document.createElement("div");
+        const isSelected = sourceName && state.selectedRide?.slug === slug && state.selectedRide?.rideName === sourceName;
+        item.className = `ride-row${sourceName ? "" : " not-found"}${isSelected ? " is-selected" : ""}`;
+        if (sourceName) {
+          item.dataset.series = `${slug}::${sourceName}`;
+          item.tabIndex = 0;
+          item.setAttribute("role", "button");
+          item.setAttribute("aria-expanded", String(Boolean(isSelected)));
+        }
+        const wait = row?.wait_minutes === null || row?.wait_minutes === undefined ? "—" : `${number(row.wait_minutes)}m`;
+        const baselineText = baseline ? `${number(baseline.average_wait_minutes, 0)}m avg` : "No baseline yet";
+        const reliabilityText = reliability ? ` · ${number(reliability.availability_percent, 0)}% reliable` : "";
+        item.innerHTML = `<span class="ride-icon">${preference.icon || "✨"}</span><div class="ride-main"><span class="ride-name" title="${escapeHtml(sourceName || preference.name)}">${escapeHtml(preference.name)}</span><span class="ride-meta"><i class="ride-state-dot ${status.state}"></i>${escapeHtml(sourceName ? status.text : "Not found in this park's feed")}${sourceName ? ` · ${baselineText}${reliabilityText}` : ""}</span></div><div class="ride-current">${sourceName ? wait : "—"}<small>${sourceName && row?.wait_minutes != null ? "CURRENT WAIT" : "WAIT"}</small></div>`;
+        if (sourceName) {
+          item.addEventListener("click", () => showRideDetail(slug, sourceName));
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              showRideDetail(slug, sourceName);
+            }
+          });
+        }
+        group.appendChild(item);
+      });
+      container.appendChild(group);
+    }
+    renderRideDetail();
+  }
+
+  function showRideDetail(slug, rideName) {
+    state.selectedRide = { slug, rideName };
+    renderRideList();
+  }
+
+  function renderRideDetail() {
+    const panel = $("ride-detail");
+    const selected = state.selectedRide;
+    if (!selected) { panel.hidden = true; panel.innerHTML = ""; return; }
+    const { slug, rideName } = selected;
+    const cache = state.cache.get(slug);
+    if (!cache) { panel.hidden = true; return; }
+    const preference = cache.rides.find((ride) => ride.sourceName === rideName)?.preference;
+    const latest = latestPerRide(cache.observations).get(rideName);
+    const baseline = cache.bestTimes.get(rideName);
+    const reliability = cache.reliability.get(normalize(rideName));
+    const status = statusLabel(latest);
+    const currentWait = latest?.wait_minutes == null ? "No wait posted" : `${number(latest.wait_minutes)} min`;
+    const stat = (label, value) => `<div class="detail-stat"><span>${label}</span><strong>${value}</strong></div>`;
+    panel.innerHTML = `<div class="detail-heading"><div><p class="eyebrow">RIDE DETAILS</p><h4>${escapeHtml(preference?.name || rideName)}</h4></div><button class="detail-close" type="button" aria-label="Close ride details">×</button></div><div class="detail-hero"><span>${preference?.icon || "🎢"}</span><div><small>RIGHT NOW</small><strong>${currentWait}</strong><em class="detail-status ${status.state}">${escapeHtml(status.text)}</em></div></div><div class="detail-stats">${stat("HISTORICAL AVG", baseline ? `${number(baseline.average_wait_minutes, 0)} min` : "—")}${stat("RECENT PEAK", baseline ? `${number(baseline.peak_wait_minutes, 0)} min` : "—")}${stat("RELIABILITY", reliability ? `${number(reliability.availability_percent, 0)}%` : "—")}${stat("AVG. OUTAGE", reliability ? `${number(reliability.average_outage_minutes, 0)} min` : "—")}</div><div class="detail-hours"><span>QUIETEST <b>${escapeHtml(baseline?.quietest_hour || "—")}</b></span><span>BUSIEST <b>${escapeHtml(baseline?.busiest_hour || "—")}</b></span></div><p class="detail-footnote">${baseline ? `Best-times snapshot ${escapeHtml(baseline.snapshot_date)} · ${number(baseline.samples)} samples` : "No best-times snapshot is available yet."}${reliability ? ` · ${number(reliability.outages)} outages across ${number(reliability.operating_days)} operating days` : ""}</p><div class="trade-panel" id="trade-panel"></div>`;
+    panel.hidden = false;
+    panel.querySelector(".detail-close").addEventListener("click", () => { state.selectedRide = null; renderRideList(); });
+    window.dispatchEvent(new CustomEvent("queue:ride-selected", { detail: {
+      slug, rideName, status: latest?.status ?? "UNKNOWN", waitMinutes: latest?.wait_minutes ?? null,
+      collectedAt: latest?.collected_at ?? null,
+    } }));
   }
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
   }
 
-  function drawChart(cache) {
-    const canvas = $("wait-chart");
+  function drawChart() {
+    const canvas = $("combined-chart");
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const dpr = window.devicePixelRatio || 1;
@@ -220,9 +291,9 @@
     const now = Date.now();
     const minX = now - historyHours * 60 * 60 * 1000;
     const maxX = now;
-    const active = cache.rides.map((ride) => ride.sourceName).filter(Boolean);
-    const rowsByRide = new Map(active.map((name) => [name, cache.observations.filter((row) => row.ride_name === name && row.wait_minutes !== null)]));
-    const maxWait = Math.max(60, ...[...rowsByRide.values()].flat().map((row) => Number(row.wait_minutes)));
+    const series = allSeries();
+    const rowsBySeries = new Map(series.map((ride) => [ride.key, ride.cache.observations.filter((row) => row.ride_name === ride.sourceName && row.wait_minutes !== null)]));
+    const maxWait = Math.max(60, ...[...rowsBySeries.values()].flat().map((row) => Number(row.wait_minutes)));
     const yMax = Math.ceil(maxWait / 30) * 30;
     const x = (time) => pad.left + ((time - minX) / (maxX - minX)) * plotW;
     const y = (wait) => pad.top + plotH - (wait / yMax) * plotH;
@@ -245,9 +316,9 @@
       ctx.fillText(new Date(t).toLocaleTimeString([], { hour: "numeric" }), px, height - 12);
     }
     ctx.save(); ctx.beginPath(); ctx.rect(pad.left, pad.top, plotW, plotH); ctx.clip();
-    active.forEach((name, index) => {
-      if (!state.visibleRides.has(name)) return;
-      const points = rowsByRide.get(name).filter((row) => Date.parse(row.collected_at) >= minX && Date.parse(row.collected_at) <= maxX);
+    series.forEach((ride, index) => {
+      if (!state.visibleRides.has(ride.key)) return;
+      const points = rowsBySeries.get(ride.key).filter((row) => Date.parse(row.collected_at) >= minX && Date.parse(row.collected_at) <= maxX);
       if (!points.length) return;
       ctx.beginPath();
       points.forEach((row, pointIndex) => {
@@ -262,34 +333,34 @@
       });
     });
     ctx.restore();
-    canvas._chartLayout = { pad, plotW, plotH, minX, maxX, yMax, active, rowsByRide, x, y };
+    canvas._chartLayout = { pad, plotW, plotH, minX, maxX, yMax, series, rowsBySeries, x, y };
   }
 
-  function renderLegend(cache) {
-    const legend = $("chart-legend");
+  function renderLegend() {
+    const legend = $("combined-legend");
     legend.innerHTML = "";
-    cache.rides.forEach(({ preference, sourceName }, index) => {
-      if (!sourceName) return;
-      if (!state.visibleRides.has(sourceName)) state.visibleRides.add(sourceName);
+    allSeries().forEach((ride, index) => {
+      if (!state.visibleRides.has(ride.key)) state.visibleRides.add(ride.key);
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `legend-item${state.visibleRides.has(sourceName) ? "" : " is-hidden"}`;
-      button.innerHTML = `<span class="legend-dot" style="background:${colors[index % colors.length]}"></span>${escapeHtml(preference.name)}`;
-      button.addEventListener("click", () => toggleRide(sourceName));
+      button.className = `legend-item${state.visibleRides.has(ride.key) ? "" : " is-hidden"}`;
+      button.title = `${ride.parkName} · ${ride.preference.name}`;
+      button.innerHTML = `<span class="legend-dot" style="background:${colors[index % colors.length]}"></span><span class="legend-park">${ride.slug === "disneyland" ? "DL" : "DCA"}</span>${escapeHtml(ride.preference.name)}`;
+      button.addEventListener("click", () => toggleRide(ride.key));
       legend.appendChild(button);
     });
   }
 
-  function toggleRide(name) {
-    if (state.visibleRides.has(name)) state.visibleRides.delete(name); else state.visibleRides.add(name);
-    const cache = state.cache.get(state.parkSlug);
-    if (cache) { renderLegend(cache); drawChart(cache); }
+  function toggleRide(key) {
+    if (state.visibleRides.has(key)) state.visibleRides.delete(key); else state.visibleRides.add(key);
+    renderLegend();
+    drawChart();
   }
 
   function handleChartMove(event) {
     const canvas = event.currentTarget;
     const layout = canvas._chartLayout;
-    const tooltip = $("chart-tooltip");
+    const tooltip = $("combined-tooltip");
     if (!layout) return;
     const rect = canvas.getBoundingClientRect();
     const mx = event.clientX - rect.left;
@@ -297,51 +368,28 @@
     const chartX = Math.max(0, Math.min(layout.plotW, mx - layout.pad.left));
     const targetTime = layout.minX + (chartX / layout.plotW) * (layout.maxX - layout.minX);
     let best = null;
-    for (let index = 0; index < layout.active.length; index += 1) {
-      const name = layout.active[index];
-      if (!state.visibleRides.has(name)) continue;
-      for (const row of layout.rowsByRide.get(name)) {
+    for (let index = 0; index < layout.series.length; index += 1) {
+      const ride = layout.series[index];
+      if (!state.visibleRides.has(ride.key)) continue;
+      for (const row of layout.rowsBySeries.get(ride.key)) {
         const dx = Math.abs(Date.parse(row.collected_at) - targetTime) / (layout.maxX - layout.minX) * layout.plotW;
         const dy = Math.abs(layout.y(Number(row.wait_minutes)) - my);
         const distance = Math.hypot(dx, dy);
-        if (distance < 18 && (!best || distance < best.distance)) best = { name, row, index, distance };
+        if (distance < 18 && (!best || distance < best.distance)) best = { ride, row, index, distance };
       }
     }
     if (!best) { tooltip.hidden = true; return; }
-    tooltip.innerHTML = `<strong style="color:${colors[best.index % colors.length]}">${escapeHtml(best.name)}</strong>${number(best.row.wait_minutes)} min · ${formatClock(best.row.collected_at)}`;
+    tooltip.innerHTML = `<strong style="color:${colors[best.index % colors.length]}">${best.ride.slug === "disneyland" ? "DL" : "DCA"} · ${escapeHtml(best.ride.preference.name)}</strong>${number(best.row.wait_minutes)} min · ${formatClock(best.row.collected_at)}`;
     tooltip.hidden = false;
     tooltip.style.left = `${Math.max(4, Math.min(rect.width - 165, mx + 12))}px`;
     tooltip.style.top = `${Math.max(2, my - 43)}px`;
   }
 
   function render() {
-    const cache = state.cache.get(state.parkSlug);
-    if (!cache) return;
-    $("chart-title").textContent = `${parks[state.parkSlug].name} rides`;
-    updateFreshness(cache);
-    renderRideList(cache);
-    renderLegend(cache);
-    drawChart(cache);
-  }
-
-  async function selectPark(slug) {
-    if (!parks[slug]) return;
-    state.parkSlug = slug;
-    state.visibleRides.clear();
-    document.querySelectorAll(".park-tab").forEach((tab) => {
-      const active = tab.dataset.park === slug;
-      tab.classList.toggle("is-active", active);
-      tab.setAttribute("aria-selected", String(active));
-    });
-    $("chart-title").textContent = `${parks[slug].name} rides`;
-    const cached = state.cache.get(slug);
-    if (cached) { render(); }
-    else {
-      $("ride-list").innerHTML = '<div class="loading-state">Loading your ride picks…</div>';
-      try { await loadPark(slug); render(); }
-      catch (error) { showError(error); }
-    }
-    refreshCurrentPark();
+    renderRideList();
+    renderLegend();
+    drawChart();
+    updateFreshness();
   }
 
   function showError(error) {
@@ -357,17 +405,23 @@
     $("fresh-label").textContent = "Data connection needs attention";
   }
 
-  async function refreshCurrentPark() {
-    if (state.busy) return;
-    state.busy = true;
+  async function refreshPark(slug) {
+    if (state.busy.has(slug)) return null;
+    state.busy.add(slug);
     try {
-      let cache = state.cache.get(state.parkSlug);
-      if (!cache) cache = await loadPark(state.parkSlug);
-      else await fetchNewObservations(state.parkSlug, cache);
-      $("page-error").hidden = true;
-      render();
-    } catch (error) { showError(error); }
-    finally { state.busy = false; }
+      const cache = state.cache.get(slug);
+      if (!cache) await loadPark(slug);
+      else await fetchNewObservations(slug, cache);
+      return null;
+    } catch (error) { return `${parks[slug].name}: ${error?.message || error}`; }
+    finally { state.busy.delete(slug); }
+  }
+
+  async function refreshAll() {
+    const errors = (await Promise.all(Object.keys(parks).map(refreshPark))).filter(Boolean);
+    if (errors.length) showError(new Error(errors.join(" · ")));
+    else $("page-error").hidden = true;
+    render();
   }
 
   function init() {
@@ -375,12 +429,14 @@
       showError(new Error("YOUR_PROJECT_REF or YOUR_SUPABASE_PUBLISHABLE placeholder"));
       return;
     }
-    document.querySelectorAll(".park-tab").forEach((tab) => tab.addEventListener("click", () => selectPark(tab.dataset.park)));
-    $("wait-chart").addEventListener("mousemove", handleChartMove);
-    $("wait-chart").addEventListener("mouseleave", () => { $("chart-tooltip").hidden = true; });
-    window.addEventListener("resize", () => { const cache = state.cache.get(state.parkSlug); if (cache) drawChart(cache); });
-    refreshCurrentPark();
-    window.setInterval(refreshCurrentPark, pollMs);
+    const canvas = $("combined-chart");
+    canvas.addEventListener("mousemove", handleChartMove);
+    canvas.addEventListener("mouseleave", () => { $("combined-tooltip").hidden = true; });
+    window.addEventListener("resize", () => {
+      drawChart();
+    });
+    refreshAll();
+    window.setInterval(refreshAll, pollMs);
   }
 
   init();
