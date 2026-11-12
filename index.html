@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4efe5">
+    <meta name="description" content="A live look at Disneyland Resort ride waits, powered by an automatically updating data pipeline.">
+    <title>Queue Exchange · Disneyland Resort</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="Queue Exchange home">
+          <span class="brand-mark" aria-hidden="true">Q</span>
+          <span>QUEUE<span class="brand-light">EXCHANGE</span></span>
+        </a>
+        <div class="topbar-note"><span class="sparkle">✳</span> THE WAIT-TIME MARKET</div>
+        <a class="pipeline-link" href="#about">How the data gets here <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <main id="top">
+        <section class="intro-row">
+          <div>
+            <p class="eyebrow">DISNEYLAND RESORT <span class="eyebrow-dot">·</span> LIVE FEED</p>
+            <h1>Make the wait<br><span>worth it.</span></h1>
+            <p class="intro-copy">Ride waits move all day. Keep an eye on the lines, spot a dip, and see what the data does next.</p>
+          </div>
+          <div class="status-card" aria-live="polite">
+            <div class="status-heading"><span id="fresh-dot" class="fresh-dot"></span><span id="fresh-label">Connecting to the data feed</span></div>
+            <div class="status-time" id="last-updated">—</div>
+            <div class="status-foot"><span class="pulse-icon">↻</span> AUTOMATIC UPDATE <b>·</b> EVERY MINUTE</div>
+          </div>
+        </section>
+
+        <section class="park-and-stats" aria-label="Park and data status">
+          <div class="park-switcher" role="tablist" aria-label="Choose a park">
+            <button class="park-tab is-active" role="tab" aria-selected="true" data-park="disneyland">Disneyland <span class="tab-arrow">↗</span></button>
+            <button class="park-tab" role="tab" aria-selected="false" data-park="california-adventure">California Adventure <span class="tab-arrow">↗</span></button>
+          </div>
+          <div class="summary-stats">
+            <div class="summary-stat"><span class="stat-label">RIDES TRACKED</span><strong id="rides-tracked">—</strong></div>
+            <div class="summary-divider"></div>
+            <div class="summary-stat"><span class="stat-label">LATEST OBSERVATION</span><strong id="latest-wait">—</strong></div>
+            <div class="summary-divider"></div>
+            <div class="summary-stat"><span class="stat-label">HISTORY SHOWN</span><strong>6 HOURS</strong></div>
+          </div>
+        </section>
+
+        <section class="market-layout">
+          <div class="chart-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">THE WAIT BOARD <span class="live-tag"><span></span> LIVE</span></p>
+                <h2 id="chart-title">Disneyland rides</h2>
+              </div>
+              <div class="chart-unit">WAIT <span>·</span> MINUTES</div>
+            </div>
+            <div class="chart-wrap"><canvas id="wait-chart" aria-label="Ride wait times over the last six hours"></canvas><div class="chart-tooltip" id="chart-tooltip" hidden></div></div>
+            <div class="chart-legend" id="chart-legend" aria-label="Toggle ride lines"></div>
+            <div class="chart-note"><span class="note-mark">↗</span> Each point is a ride observation saved by the scheduled pipeline.</div>
+          </div>
+
+          <aside class="side-card">
+            <div class="side-heading"><div><p class="eyebrow">YOUR WATCHLIST</p><h2>Ride signals</h2></div><span class="watchlist-icon" aria-hidden="true">✳</span></div>
+            <p class="side-subtitle">Your picks, with today's wait next to the captured historical average.</p>
+            <div class="ride-list" id="ride-list"><div class="loading-state">Loading your ride picks…</div></div>
+            <div class="side-foot"><span>BASELINE</span><span>Rope Drop best-times summary</span></div>
+          </aside>
+        </section>
+
+        <section class="data-story" id="about">
+          <div class="story-icon" aria-hidden="true">↗</div>
+          <div><p class="eyebrow">A LITTLE PIPELINE, DOING ITS THING</p><h2>New observations arrive while you watch.</h2><p>The chart reads public, read-only data from Supabase. A scheduled Edge Function collects ride waits about once a minute; the page checks for new rows every 60 seconds. Historical averages and reliability come from the saved Rope Drop News summaries.</p></div>
+          <div class="story-credit">DATA: ROPE DROP NEWS<br>ATTRIBUTION: CC BY 4.0</div>
+        </section>
+
+        <div class="page-error" id="page-error" role="alert" hidden></div>
+        <footer><span>QUEUE EXCHANGE <span class="footer-star">✳</span> A CS 452 DATA PIPELINE PROJECT</span><span>WAIT TIMES ARE OBSERVATIONS, NOT PROMISES.</span></footer>
+      </main>
+    </div>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
